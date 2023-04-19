@@ -13,6 +13,6 @@ library(KMSim)
 ?KMSim
 ```
 
-For illustrative examples using real data see:
+Illustrative examples using real data can be found at:
 
 - [KMSim: Simulating from a Kaplan-Meier estimator](https://rpubs.com/FJRubio/KMSim)
