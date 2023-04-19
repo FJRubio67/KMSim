@@ -1,6 +1,6 @@
 # KMSim (R package)
 
-An R package for simulating from a (KM) estimator of a survival function, based on a sample of times to event (either for the entire sample, a subgroup, or an individual).
+An R package for simulating times to event from a (KM) estimator of a survival function, based on a sample of times to event (either for the entire sample, a subgroup, or an individual).
 
 To install the `KMSim` R package use:
 
