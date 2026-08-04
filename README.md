@@ -49,7 +49,7 @@ sim_times <- KMSim(km_fit, n = 100)
 
 ## Tutorial
 
-- [KMSim: Simulating from a Kaplan-Meier estimator](https://rpubs.com/FJRubio/KMSim) —
+- [KMSim: Simulating from a Kaplan-Meier estimator](https://fjrubio-kmsim.share.connect.posit.cloud/) —
   illustrative examples using real survival data
 
 ## Related resources
