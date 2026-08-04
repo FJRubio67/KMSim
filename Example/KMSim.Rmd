@@ -1,0 +1,259 @@
+---
+title: "KMSim: Simulating from a Kaplan-Meier estimator"
+author: '[F. Javier Rubio](https://sites.google.com/site/fjavierrubio67/) and Manuela Quaresma'
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+bibliography: references.bib
+---
+
+# Methods
+Let $\widehat{S}(t)$ be the [Kaplan-Meier](https://en.wikipedia.org/wiki/Kaplan%E2%80%93Meier_estimator) (KM) estimator of a survival function $S(t)$, based on a sample of times to event (either for the entire sample, a subgroup, or an individual).
+
+In some cases, we are interested in simulating survival times which resemble the characteristics of the original population of interest. One way of doing so consists of simulating from $\widehat{S}(t)$. Next, we present two methods for simulating survival times from $\widehat{S}(t)$, 
+
+1. **Method I**: Simulating directly from $\widehat{S}(t)$.
+
+2. **Method II**: Simulating from a parametric approximation of $\widehat{S}(t)$.
+
+## Data input
+
+For both methods, we consider the following cases where the data input is given as follows:
+
+(a) The KM estimator is available as an object of class `survfit` (from the R package `survival`)
+
+(b) The KM estimator is available only through the the times to event of interest and the survival probabilities (i.e. the coordinates to construct the estimator).
+
+Next, we present a brief description of each method as well as some illustrative examples. The routines used to produce these examples are available in the R package `KMSim`. We also discuss advantages and disadvantages of these methods.
+
+
+# Method I
+Suppose that we want to simulate directly from $\widehat{S}(t)$. Since the KM estimator is a survival probability curve, we can simulate from this distribution using the [Probability integral transform](https://en.wikipedia.org/wiki/Probability_integral_transform), which essentially requires
+
+(i). Simulating a value $u$ from a $U(0,1)$ distribution,
+
+(ii). Finding $t^*$ such that $\widehat{S}(t^*) = u$.
+
+
+## Example: Method I, data input (a)
+
+An advantage of Method I, when the KM estimator is available as an object of class, `survfit` is that step (ii) can be easily implemented using the command `quantile`, which inverts the relationship $\widehat{S}(t^*) = u$. A disadvantage of this method is that the estimator $\widehat{S}(t)$ is lower bounded. Thus, there exist values of $u$ for which no solution to $\widehat{S}(t^*) = u$ exist. In such cases Method I returns `NA`. This `NA` value could be replaced by `Inf`, or a large value, which assumes that the corresponding patient had a large time-to-event. If one introduces administrative censoring (this is, censoring all values larger than a predetermined value $C>0$), then, those problematic values simply become right-censored observations. Another disadvantage of this method is that the minimum value we can simulate coincides with the minimum value in the sample.
+
+The following R code illustrates how to use the `KMsim` function from the R package `KMSim` to simulate times to event using Method I under data input (a). We use the `NCCTG Lung Cancer Data` from the R package `survival` to construct the KM estimator.
+
+```{r}
+rm(list=ls())
+library(survival)
+#https://github.com/FJRubio67/KMSim
+library(KMSim)
+
+# Kaplan-Meier for the original data
+kmlung <- survfit(Surv(time, status) ~ 1,data = lung)
+
+# Simulated survival times using Method I, data input (a)
+simul <- KMSim(KM.obj = kmlung, n = 10000, type = "KM", seed = 1234)
+
+# Replacing NAs by Inf
+simul[is.na(simul)] <- Inf
+
+# Censoring the simulated times at the max of the original observations
+status.sim <- ifelse(simul < max(lung$time), 1, 0)
+simcens <- ifelse(simul < max(lung$time), simul, max(lung$time))
+
+# Kaplan-Meier estimator for the simulated times
+kmsim <- survfit(Surv(simcens, status.sim) ~ 1)
+
+# Comparison
+plot(kmlung$time, kmlung$surv, type = "l", col = "black", lwd = 2, lty = 1, ylim = c(0,1),
+     xlab = "Time", ylab = "Survival")
+points(kmsim$time, kmsim$surv, type = "l", col = "gray", lwd = 2, lty = 2)
+legend("topright", legend = c("Original","Simulated"), col = c("black","gray"), lwd = c(2,2), lty = c(1,2))
+```
+
+## Example: Method I, data input (b)
+
+In this case, we only have access to the times of interest (`times`) and the survival probabilities (`survprob`) used to construct the KM estimator. We will reconstruct the KM estimator using the command `stepfun`, in order to create the step function and to find the solution to $\widehat{S}(t^*) = u$ using the command `uniroot`. Similar to the discussion in data input (a), we assign the minimum observed value when the simulated $u$ is greater than the largest `survprob` available, and assign `Inf` when $u$ is smaller than the smallest `survprob`.
+
+There exist several scenarios where one may only have access to the times of interest (`times`) and the survival probabilities (`survprob`), rather than the full KM object. For instance, when working with confidential data, researchers may only be able to access aggregated data. Another example is the outcome from some packages, such as `randomForestSRC`, which are able to produce individual KM estimators, but these are only reported in terms of the coordinates (times and survival probabilities) of such estimators.
+
+The following R code illustrates how to use the `KMsim` function from the R package `KMSim` to simulate times to event using Method I under data input (b). We use the `NCCTG Lung Cancer Data` from the R package `survival` to construct the KM estimator.
+
+```{r}
+rm(list=ls())
+library(survival)
+library(KMSim)
+
+# Kaplan-Meier for the original data
+kmlung <- survfit(Surv(time, status) ~ 1,data = lung)
+
+# Simulated survival times based on Method I, data input (b)
+simul <- KMSim(times = kmlung$time, survprob = kmlung$surv, n = 10000, type = "KM", seed = 1234)
+
+# Replacing NAs by Inf
+simul[is.na(simul)] <- Inf
+
+# Censoring the simulated times at the max of the original observations
+status.sim <- ifelse(simul < max(lung$time), 1, 0)
+simcens <- ifelse(simul < max(lung$time), simul, max(lung$time))
+
+# Kaplan-Meier estimator for the simulated times
+kmsim <- survfit(Surv(simcens, status.sim) ~ 1)
+
+# Comparison
+plot(kmlung$time, kmlung$surv, type = "l", col = "black", lwd = 2, lty = 1, ylim = c(0,1),
+     xlab = "Time", ylab = "Survival")
+points(kmsim$time, kmsim$surv, type = "l", col = "gray", lwd = 2, lty = 2)
+legend("topright", legend = c("Original","Simulated"), col = c("black","gray"), lwd = c(2,2), lty = c(1,2))
+
+```
+
+# Method II
+Suppose now that we want to simulate from $\widehat{S}(t)$, using a parametric approximation $\tilde{S}(t) = S(t ; \tilde{\theta})$ of $\widehat{S}(t)$. The reason for this might be that we want to be able to simulate from the tails of the distribution, or that we want to use the model for predictions, and etcetera. Ideally, we would like to use a flexible parametric distribution to construct the parametric survival function $S(t;\theta)$. One possible option, but not limited to, is the [Power Generalised Weibull](https://rpubs.com/FJRubio/PGW) (PGW) distribution. The corresponding hazard function can accommodate bathtub, unimodal and monotone (increasing and decreasing) hazard shapes. Other distributions can be used as well. An advantage of the PGW distribution is that the corresponding survival function is available in closed-form, and simulating from this distribution is straightforward.
+
+For this method, we find the best approximation $\tilde{S}(t) = S(t ; \tilde{\theta})$ by minimising the sum of square differences between the KM estimator $\widehat{S}(t)$ and the PGW survival function $S(t;\theta)$ at a collection of time points $\{t_1,\dots,t_{nlsp}\}$. These points are equally spaced, for convenience, in the range of the observed survival times. We only consider values of $t_j$ in the observed sample of times-to-event. That is
+
+$$
+\tilde{\theta} = \text{argmin}_{\theta \in \Theta} \sum_{j=1}^{nlsp} \left[S(t_j;\theta) -  \widehat{S}(t_j)\right]^2.
+$$
+The minimisation step is performed using the R command `nlminb`.
+
+Of course, a disadvantage of this method is that, although the PGW distribution is very flexible, it is still subject to misspecification ("All models are wrong").
+
+<span style="color:red">WARNING</span>: Note that fitting a parametric model based on least squares estimation is sensitive to the choice of the knots. In many cases, the automatic rule we have chosen in Method II may give bad results, depending on the distribution of the original survival times. For instance, when many of the observations are concentrated around zero. In that case, a different split rule, or many more points would be required to obtain a satisfactory fit. Method I may provide better results in such cases.
+
+## Example: Method II, data input (a)
+The following R code illustrates how to use the `KMsim` function from the R package `KMSim` to simulate times to event using Method II, under data input (a). This command returns the simulated sample as well as the least squares estimator (`LSE`), which can be used to produce other quantities of interest. We use the `NCCTG Lung Cancer Data` from the R package `survival` to construct the KM estimator.
+ 
+
+```{r}
+rm(list=ls())
+library(survival)
+library(KMSim)
+
+# Kaplan-Meier for the original data
+kmlung <- survfit(Surv(time, status) ~ 1,data = lung)
+
+# Simulated survival times based on Method II, data input (a)
+simul <- KMSim(KM.obj = kmlung, n = 10000, type = "PGW", nlsp = 50, seed = 1234)
+
+hist(simul$sim, probability = TRUE, xlab = "Simulated times", breaks = 30, main = "")
+box()
+
+# Censoring the simulated times at the max of the original observations
+status.sim <- ifelse(simul$sim < max(lung$time), 1, 0)
+simcens <- ifelse(simul$sim < max(lung$time), simul$sim, max(lung$time))
+
+# fitted model
+LSE <- simul$LSE
+fit.surv <- Vectorize(function(t) spgw(t, LSE[1], LSE[2], LSE[3]))
+
+# Kaplan-Meier based on the simulated sample
+kmsim <- survfit(Surv(simcens, status.sim) ~ 1)
+
+# Comparison
+plot(kmlung$time, kmlung$surv, type = "l", col = "black", lwd = 2, lty = 1, ylim = c(0,1),
+     xlab = "Time", ylab = "Survival", xlim = c(0,1500))
+curve(fit.surv,0, 1500, col = "gray", lwd = 2, lty = 2, add = TRUE)
+points(kmsim$time, kmsim$surv, type = "l", col = "red", lwd = 2, lty = 3)
+legend("topright", legend = c("KM Original","Parametric","KM Simulated"), col = c("black","gray","red"), 
+       lwd = c(2,2,2), lty = c(1,2,3))
+```
+
+## Example: Method II, data input (b)
+The following R code illustrates how to use the `KMsim` function from the R package `KMSim` to simulate times to event using Method II, under data input (b). This command returns the simulated sample as well as the least squares estimator (`LSE`), which can be used to produce other quantities of interest. We use the `NCCTG Lung Cancer Data` from the R package `survival` to construct the KM estimator.
+
+```{r}
+rm(list=ls())
+library(survival)
+library(KMSim)
+
+# Kaplan-Meier for the original data
+kmlung <- survfit(Surv(time, status) ~ 1,data = lung)
+
+# Simulated survival times based on Method II, data input (b)
+simul <- KMSim(times  = kmlung$time, survprob = kmlung$surv, n = 10000, 
+               type = "PGW", nlsp = 50, seed = 1234)
+
+hist(simul$sim, probability = TRUE, xlab = "Simulated times", breaks = 30, main = "")
+box()
+
+# Censoring the simulated times at the max of the original observations
+status.sim <- ifelse(simul$sim < max(lung$time), 1, 0)
+simcens <- ifelse(simul$sim < max(lung$time), simul$sim, max(lung$time))
+
+# fitted model
+LSE <- simul$LSE
+fit.surv <- Vectorize(function(t) spgw(t, LSE[1], LSE[2], LSE[3]))
+
+# Kaplan-Meier based on the simulated sample
+kmsim <- survfit(Surv(simcens, status.sim) ~ 1)
+
+# Comparison
+plot(kmlung$time, kmlung$surv, type = "l", col = "black", lwd = 2, lty = 1, ylim = c(0,1),
+     xlab = "Time", ylab = "Survival", xlim = c(0,1500))
+curve(fit.surv,0, 1500, col = "gray", lwd = 2, lty = 2, add = TRUE)
+points(kmsim$time, kmsim$surv, type = "l", col = "red", lwd = 2, lty = 3)
+legend("topright", legend = c("KM Original","Parametric","KM Simulated"), col = c("black","gray","red"), 
+       lwd = c(2,2,2), lty = c(1,2,3))
+```
+
+# Simulating from individual KM estimators
+In the following example, we illustrate how to simulate survival times from individual KM estimators obtained from a Random Survival Forest [@ishwaran:2008]. That is, we are interested in simulating one time to event for each individual using the corresponding individual KM estimator. In this case, the KM estimator is available as described in input (b). We illustrate the use of Method II using the `veteran2` data set from the R package `survival`.
+
+## Example
+```{r}
+rm(list=ls())
+
+library(survival)
+library("randomForestSRC")
+library(KMSim)
+
+# Data preparation
+data(veteran, package = "randomForestSRC")
+veteran2 <- data.frame(lapply(veteran, factor))
+veteran2$time <- veteran$time
+veteran2$status <- veteran$status
+dim(veteran2)
+
+# train the forest 
+o.grow <- rfsrc(Surv(time, status) ~ ., veteran2) 
+
+# Survival forest
+print(o.grow)
+
+
+# Simulated survival times based on Method II, data input (b)
+simul <- vector()
+LSES <- matrix(0, nrow = nrow(veteran2), ncol = 3)
+
+start_time <- Sys.time()
+for(i in 1:nrow(veteran2)){
+  KMSim.obj <- KMSim(times  = as.vector(o.grow$time.interest), survprob = as.vector(o.grow$survival.oob[i,]), 
+                     n = 1, type = "PGW", nlsp = 100, seed = i)
+  
+  simul[i] <- KMSim.obj$sim
+  LSES[i,] <- KMSim.obj$LSE
+}
+
+
+# Illustration of the parametric fit for 6 individuals
+
+index <- c(20,40,60,80,100,120)
+
+par(mfrow = c(3,2))
+for(j in index){
+
+# fitted model
+fit.surv <- Vectorize(function(t) spgw(t, LSES[j,1], LSES[j,2], LSES[j,3]))
+
+# Comparison
+plot(as.vector(o.grow$time.interest), as.vector(o.grow$survival.oob[j,]), 
+     type = "l", col = "black", lwd = 2, lty = 1, ylim = c(0,1),
+     xlab = "Time", ylab = "Survival", main = paste("Individual ", j))
+curve(fit.surv,0, max(veteran2$time), col = "gray", lwd = 2, lty = 2, add = TRUE)
+legend("topright", legend = c("KM","Parametric"), col = c("black","gray"), lwd = c(2,2), lty = c(1,2))
+}
+
+```

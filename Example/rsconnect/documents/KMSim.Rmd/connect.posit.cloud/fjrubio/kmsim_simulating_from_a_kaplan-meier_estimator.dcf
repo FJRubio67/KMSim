@@ -1,0 +1,12 @@
+name: kmsim_simulating_from_a_kaplan-meier_estimator
+title: KMSim: Simulating from a Kaplan-Meier estimator
+username: fjrubio
+account: fjrubio
+server: connect.posit.cloud
+hostUrl: https://api.connect.posit.cloud/v1
+appId: 019fce37-4904-f0ed-3ed0-852787465e45
+bundleId:
+url: https://connect.posit.cloud/fjrubio/content/019fce37-4904-f0ed-3ed0-852787465e45
+version: 1
+asMultiple: FALSE
+asStatic: TRUE
